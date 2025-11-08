@@ -1,6 +1,10 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import List
+from database import create_document
 
 app = FastAPI()
 
@@ -11,6 +15,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class OnboardPayload(BaseModel):
+    name: str
+    birthDate: str
+    birthTime: str | None = None
+    interests: List[str] | None = None
+
+@app.post("/api/onboard")
+async def onboard(data: OnboardPayload):
+    try:
+        doc_id = create_document('onboard', data.dict())
+        return {"ok": True, "id": doc_id}
+    except Exception as e:
+        # Fallback to non-persistent response if DB is not configured
+        return {"ok": False, "error": str(e)[:120]}
 
 @app.get("/")
 def read_root():
@@ -64,6 +83,14 @@ def test_database():
     
     return response
 
+# Simple SSE demo endpoint that streams tokens
+@app.get('/api/chat/stream')
+async def stream_chat():
+    async def event_generator():
+        text = "The cosmos whispers in gradients of possibility. "
+        for ch in text:
+            yield ch
+    return StreamingResponse(event_generator(), media_type='text/plain')
 
 if __name__ == "__main__":
     import uvicorn
